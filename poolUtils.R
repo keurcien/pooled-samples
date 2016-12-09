@@ -45,7 +45,7 @@ simulate.cover = function(nrow,ncol,min.cover,max.cover){
 #' @param cover.matrix a matrix with n rows and p columns where n is the number of pools and is the number of markers.
 #' @param nINDperPOP a list specifying the number of individuals for each pool.
 #'
-sample.geno = function(pool.matrix,cover.matrix,nINDperPOOL=NULL){
+sample.geno = function(pool.matrix=NULL,cover.matrix=NULL,nINDperPOOL=NULL){
   nPOOL <- nrow(pool.matrix)  
   nSNP <- ncol(pool.matrix)
   if (missing(nINDperPOOL)){
@@ -53,12 +53,32 @@ sample.geno = function(pool.matrix,cover.matrix,nINDperPOOL=NULL){
   } else {
     sample.size <- nINDperPOOL
   }
-  geno <- NULL
-  for (k in 1:nPOOL){
-    for (i in 1:sample.size[k]){
-      G <- array(0,dim=c(1,nSNP))
-      G[,] <- sapply(1:nSNP,FUN=function(l){rbinom(n = 1, size = 2, prob = pool.matrix[k,l])})
-      geno <- rbind(geno,G)
+  if (missing(cover.matrix)){
+    print("Coverage matrix missing. Drawing genotypes from a binomial distribution.")
+    geno <- NULL
+    for (k in 1:nPOOL){
+      for (i in 1:sample.size[k]){
+        G <- array(0,dim=c(1,nSNP))
+        G[,] <- sapply(1:nSNP,FUN=function(l){rbinom(n = 1, size = 2, prob = pool.matrix[k,l])})
+        geno <- rbind(geno,G)
+      }
+    }
+  } else {
+    print("Coverage matrix not missing. Drawing genotypes from a beta-binomial distribution.")
+    geno <- NULL
+    for (k in 1:nPOOL){
+      cover.1 <- cover.matrix[k,]
+      n.reads <- array(NA,dim=c(1,nSNP))
+      nna <- which(pool.matrix[k,]>0)
+      n.reads <- cover.1[nna]/pool.matrix[k,nna]
+      cover.2 <- n.reads - cover.1
+      for (i in 1:sample.size[k]){
+        p <- array(0,dim=c(1,nSNP))
+        p[,] <- sapply(1:nSNP,FUN=function(l){rbeta(n = 1,cover.1[l],cover.2[l])})
+        G <- array(0,dim=c(1,nSNP))
+        G[,] <- sapply(1:nSNP,FUN=function(l){rbinom(n = 1, size = 2, prob = p[1,l])})
+        geno <- rbind(geno,G)
+      }
     }
   }
   return(geno)
