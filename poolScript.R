@@ -1,0 +1,5 @@
+geno.matrix <- read.table("~/Documents/thesis/Datasets/geno3pops")
+pop <- c(rep(1,50),rep(2,50),rep(3,50))
+pool.matrix <- get.pool.matrix(data=geno.matrix,pop=pop,ploidy=2)
+cover.matrix <- simulate.cover(nrow(pool.matrix),ncol(pool.matrix),min.cover=5,max.cover=50)
+new.geno <- sample.geno(pool.matrix,cover.matrix,nINDperPOOL = c(50,50,50))

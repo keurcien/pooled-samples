@@ -1,3 +1,6 @@
+library(purrr)
+library(magrittr)
+
 #' Convert genotypes to pooled samples
 #'
 #' \code{get.pool.matrix} creates a pooled-sequenced data out of a genotype matrix,
@@ -52,15 +55,13 @@ sample.geno = function(pool.matrix,cover.matrix,nINDperPOOL=NULL){
   }
   geno <- NULL
   for (k in 1:nPOOL){
-    one <- matrix(1,nrow= sample.size,1)
-    rep.G[] <- one %*% pool.matrix[k,]
-    G <- rep.G %>%
-      map_dbl( ~ rbinom(n = 1, size = 2, prob = .x)) %>%
-      matrix(nrow = d * pop.nbindiv, ncol = L)
-    geno <- rbind(geno,G)
+    for (i in 1:sample.size[k]){
+      G <- array(0,dim=c(1,nSNP))
+      G[,] <- sapply(1:nSNP,FUN=function(l){rbinom(n = 1, size = 2, prob = pool.matrix[k,l])})
+      geno <- rbind(geno,G)
+    }
   }
-
-  return(G)
+  return(geno)
 }
 
 
