@@ -28,12 +28,27 @@ get.pool.matrix = function(data,pop,ploidy=2){
 #' 
 #' @param nrow an integer equal to the number of pools.
 #' @param ncol an integer equal to the number of markers.
-#' @param min.cover an integer indicating the minimum coverage.
+#' @param min.cover an integer indicating the minimum coverage. If min.cover is a list of length 2, simulate.cover 
 #' @param max.cover an integer indicating the maximum coverage.
 #'
 simulate.cover = function(nrow,ncol,min.cover,max.cover){
-  rnum <- floor(runif(n = nrow*ncol,min=min.cover,max=max.cover))+1
-  return(matrix(rnum,nrow = nrow,ncol = ncol))
+  if (length(min.cover==1)){
+    rnum <- floor(runif(n = nrow*ncol,min=min.cover,max=max.cover))+1
+    coverage.mat <- matrix(rnum,nrow = nrow,ncol = ncol)
+  } else if (length(min.cover==2)){
+    if (ncol > 20){
+      rnum <- floor(runif(n = nrow*(ncol-20),min=min.cover[1],max=max.cover[1]))+1
+      normal.cov <- matrix(rnum,nrow = nrow,ncol = (ncol-20))
+      rnum.bis <- floor(runif(n = nrow*20,min=min.cover[2],max=max.cover[2]))+1
+      high.cov <- matrix(rnum.bis,nrow = nrow,ncol = 20)
+      coverage.mat <- cbind(normal.cov,high.cov)
+    } else {
+      stop("Please proceed with a high number of SNPs.")
+    }
+  } else {
+    stop("Unvalid min.cover.")
+  }
+  return(coverage.mat)
 }
 
 
