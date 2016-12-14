@@ -1,22 +1,37 @@
 require(ggplot2)
+require(pcadapt)
 source("~/Documents/thesis/git/FDR/fdrUtils.R")
 source("~/Documents/thesis/git/pooled-samples/poolUtils.R")
 source("~/Documents/thesis/git/pooled-samples/poolOld.R")
 
-geno.matrix <- read.table("~/Documents/thesis/Datasets/geno3pops")
+case <- "DM"
+min.maf <- 0
+
+if (case=="DM"){
+  geno.matrix <- read.table(system.file("extdata","geno3pops",package="pcadapt"))
+  gt <- 1:150
+} else if (case=="IM"){
+  geno.matrix <- read.table("~/Documents/thesis/MolEcolRes/IM/dems_3_neu_10_out_001_n150_p1000")
+  gt <- read.table("~/Documents/thesis/MolEcolRes/IM/dems_3_neu_10_out_001_n150_p1000.gt")$V1
+}
+
 pop <- c(rep(1,50),rep(2,50),rep(3,50))
 pool.matrix <- get.pool.matrix(data=geno.matrix,pop=pop,ploidy=2)
-cover.matrix <- simulate.cover(nrow(pool.matrix),ncol(pool.matrix),min.cover=c(40,5000),max.cover=c(50,6000))
-new.geno <- sample.geno(pool.matrix,cover.matrix,nINDperPOOL = c(200,200,200))
-bino.geno <- sample.geno(pool.matrix,nINDperPOOL = c(200,200,200))
+cover.matrix <- simulate.cover(nrow=nrow(pool.matrix),ncol=ncol(pool.matrix),
+                               min.cover=c(100,1000),max.cover=c(200,2000),
+                               high.cov.loc = 350:400)
+pool.matrix.test <- cover.to.pool(data=geno.matrix,cover.matrix = cover.matrix,pop = pop)
+new.geno <- sample.geno(pool.matrix = pool.matrix.test,cover.matrix,nINDperPOOL = c(100,100,100))
+bino.geno <- sample.geno(pool.matrix.test,nINDperPOOL = c(100,100,100))
+
 
 ## Get the statistics
 filename <- read.pcadapt(new.geno, type = "lfmm", local.env = TRUE)
-x <- pcadapt(filename,K=2)
+x <- pcadapt(filename,K=2,min.maf = min.maf)
 filename.bino <- read.pcadapt(bino.geno, type = "lfmm", local.env = TRUE)
-x.bino <- pcadapt(filename.bino,K=2)
-y <- pool.old(pool.matrix,K=2)
-z <- create.pcadapt.pool(pool.matrix,K=2,min.maf=0.05,cover.matrix = cover.matrix)
+x.bino <- pcadapt(filename.bino,K=2,min.maf = min.maf)
+y <- pool.old(pool.matrix.test,K=2)
+z <- pool.old.corrected(pool.matrix.test,K=2,min.maf = min.maf,cover.matrix = cover.matrix)
 
 ## Order the statistics
 rnk.1 <- sort(x$stat,decreasing = TRUE,index.return=TRUE)$ix
@@ -25,10 +40,10 @@ rnk.3 <- sort(x.bino$stat,decreasing = TRUE,index.return=TRUE)$ix
 rnk.4 <- sort(z$stat,decreasing = TRUE,index.return=TRUE)$ix
 
 ## Create the data frames
-df.1 <- create.fdr.pow(rnk.1,ground.truth = 1:150,soft.name = "Beta-binomial sampling",lmax = 1000,smooth = TRUE)
-df.2 <- create.fdr.pow(rnk.2,ground.truth = 1:150,soft.name = "First version",lmax = 1000,smooth = TRUE)
-df.3 <- create.fdr.pow(rnk.3,ground.truth = 1:150,soft.name = "Binomial sampling",lmax = 1000,smooth = TRUE)
-df.4 <- create.fdr.pow(rnk.4,ground.truth = 1:150,soft.name = "Coverage correction",lmax = 1000,smooth = TRUE)
+df.1 <- create.fdr.pow(rnk.1,ground.truth = gt,soft.name = "Beta-binomial sampling",smooth = TRUE)
+df.2 <- create.fdr.pow(rnk.2,ground.truth = gt,soft.name = "First version",smooth = TRUE)
+df.3 <- create.fdr.pow(rnk.3,ground.truth = gt,soft.name = "Binomial sampling",smooth = TRUE)
+df.4 <- create.fdr.pow(rnk.4,ground.truth = gt,soft.name = "Coverage correction",smooth = TRUE)
 
 ## Bind the data frames
 df <- rbind(df.1,df.2,df.3,df.4)
@@ -37,6 +52,7 @@ df[,2] <- as.numeric(as.character(df[,2]))
 df[,3] <- as.numeric(as.character(df[,3]))
 colnames(df) <- c("Software","FDR","Power")
 
+## ggplot
 p0 <- ggplot(data = df,aes(x=FDR,y=Power)) + 
   geom_line(aes(linetype=Software, color=Software),size=2,na.rm = TRUE) +
   xlim(0,1) + ylim(0,1) +
