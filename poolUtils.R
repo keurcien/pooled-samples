@@ -76,7 +76,7 @@ simulate.cover = function(nrow,ncol,min.cover,max.cover,high.cov.loc=NULL,high.c
 #' @param nINDperPOP a list specifying the number of individuals for each pool.
 #' @param method a character string indicating the method used for sampling.
 #'
-sample.geno = function(pool.matrix=NULL,cover.matrix=NULL,nINDperPOOL=NULL,method="betabino"){
+sample.geno = function(pool.matrix=NULL,cover.matrix=NULL,nINDperPOOL=NULL,method="per.pop"){
   nPOOL <- nrow(pool.matrix)  
   nSNP <- ncol(pool.matrix)
   if (missing(nINDperPOOL)){
@@ -103,20 +103,18 @@ sample.geno = function(pool.matrix=NULL,cover.matrix=NULL,nINDperPOOL=NULL,metho
       n.reads[nna] <- cover.1[nna]/pool.matrix[k,nna]
       n.reads[na] <- cover.1[na]/epsilon
       cover.2 <- n.reads - cover.1
-      if (method=="betabino"){
+      if (method=="per.pop"){
         p <- matrix(rbeta(sample.size[k]*nSNP,cover.1+1,cover.2+1),nrow=sample.size[k],ncol=nSNP)
         p.aux <- matrix(p,nrow=1)
         G <- t(matrix(rbinom(sample.size[k]*nSNP,size=2,prob = p.aux),ncol=sample.size[k],nrow=nSNP))
         geno <- rbind(geno,G)
-      } 
-#      geno <- rbind(geno,G)
-#       for (i in 1:sample.size[k]){
-#         p <- array(0,dim=c(1,nSNP))
-#         p[,] <- sapply(1:nSNP,FUN=function(l){rbeta(n = 1,cover.1[l]+1,cover.2[l]+1)})
-#         G <- array(0,dim=c(1,nSNP))
-#         G[,] <- sapply(1:nSNP,FUN=function(l){rbinom(n = 1, size = 2, prob = p[1,l])})
-#         geno <- rbind(geno,G)
-#       }
+      } else if (method=="per.ind"){
+        for (ind in 1:sample.size[k]){
+          p <- rbeta(nSNP,cover.1+1,cover.2+1)
+          G <- matrix(rbinom(nSNP,size=2,prob = p),nrow=1,ncol=nSNP)
+          geno <- rbind(geno,G)
+        }
+      }
     }
   }
   return(geno)
