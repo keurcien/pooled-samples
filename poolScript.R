@@ -4,7 +4,7 @@ source("~/Documents/thesis/git/FDR/fdrUtils.R")
 source("~/Documents/thesis/git/pooled-samples/poolUtils.R")
 source("~/Documents/thesis/git/pooled-samples/poolOld.R")
 
-case <- "IM"
+case <- "DM"
 min.maf <- 0.05
 
 if (case=="DM"){
@@ -18,12 +18,12 @@ if (case=="DM"){
 pop <- c(rep(1,50),rep(2,50),rep(3,50))
 pool.matrix <- get.pool.matrix(data=geno.matrix,pop=pop,ploidy=2)
 cover.matrix <- simulate.cover(nrow=nrow(pool.matrix),ncol=ncol(pool.matrix),
-                               min.cover=c(100,1000),max.cover=c(200,2000),
+                               min.cover=c(2,1000),max.cover=c(5,2000),
                                high.cov.loc = 350:400)
 pool.matrix.test <- cover.to.pool(data=geno.matrix,cover.matrix = cover.matrix,pop = pop)
-new.geno <- sample.geno(pool.matrix = pool.matrix.test,cover.matrix,nINDperPOOL = c(100,100,100))
-bino.geno <- sample.geno(pool.matrix.test,nINDperPOOL = c(100,100,100))
-ind.geno <- sample.geno(pool.matrix.test,cover.matrix=cover.matrix,nINDperPOOL = c(100,100,100),method = "per.ind")
+new.geno <- sample.geno(pool.matrix = pool.matrix.test,cover.matrix,nINDperPOOL = c(1000,1000,1000))
+bino.geno <- sample.geno(pool.matrix.test,nINDperPOOL = c(1000,1000,1000))
+ind.geno <- sample.geno(pool.matrix.test,cover.matrix=cover.matrix,nINDperPOOL = c(1000,1000,1000),method = "per.ind")
 
 ## Get the statistics
 filename <- read.pcadapt(new.geno, type = "lfmm", local.env = TRUE)
@@ -35,13 +35,25 @@ x.ind <- pcadapt(filename.bino,K=2,min.maf = min.maf)
 y <- pool.old(pool.matrix.test,K=2)
 z <- pool.old.corrected(pool.matrix.test,K=2,min.maf = min.maf,cover.matrix = cover.matrix)
 
+## For multiple runs
 stat.multiple <- 0
-for (n.test in 1:10){
-  multiple.geno <- sample.geno(pool.matrix = pool.matrix.test,cover.matrix,nINDperPOOL = c(20,20,20))
+n.run <- 10
+stat.set <- NULL
+for (n.test in 1:n.run){
+  multiple.geno <- sample.geno(pool.matrix = pool.matrix.test,cover.matrix,nINDperPOOL = c(1000,1000,1000))
   filename.multiple <- read.pcadapt(multiple.geno, type = "lfmm", local.env = TRUE)
   x.multiple <- pcadapt(filename.multiple,K=2,min.maf = min.maf)
   stat.multiple <- stat.multiple + x.multiple$chi2.stat
+  stat.set <- rbind(stat.set,x.multiple$stat)
 }
+deg.f <- 2
+x.sum <- x.multiple
+x.sum$stat <- stat.multiple/n.run
+x.sum$gif <- median(x.sum$stat,na.rm=TRUE)/qchisq(0.5,df=deg.f)
+x.sum$chi2.stat <- x.sum$stat/x.sum$gif
+x.sum$pvalues <- as.numeric(pchisq(x.sum$chi2.stat,df=deg.f,lower.tail=FALSE))
+plot(x.sum,option="qqplot")
+#stat.med <- apply(stat.set,MARGIN=2,FUN=function(x){median(x)})
 
 ## Order the statistics
 rnk.1 <- sort(x$stat,decreasing = TRUE,index.return=TRUE)$ix
@@ -50,6 +62,7 @@ rnk.3 <- sort(x.bino$stat,decreasing = TRUE,index.return=TRUE)$ix
 rnk.4 <- sort(z$stat,decreasing = TRUE,index.return=TRUE)$ix
 rnk.5 <- sort(x.ind$stat,decreasing = TRUE,index.return=TRUE)$ix
 rnk.6 <- sort(stat.multiple,decreasing = TRUE,index.return=TRUE)$ix
+#rnk.7 <- sort(stat.med,decreasing = TRUE,index.return=TRUE)$ix
 
 ## Create the data frames
 df.1 <- create.fdr.pow(rnk.1,ground.truth = gt,soft.name = "Beta-binomial sampling",smooth = TRUE)
@@ -57,7 +70,8 @@ df.2 <- create.fdr.pow(rnk.2,ground.truth = gt,soft.name = "First version",smoot
 df.3 <- create.fdr.pow(rnk.3,ground.truth = gt,soft.name = "Binomial sampling",smooth = TRUE)
 df.4 <- create.fdr.pow(rnk.4,ground.truth = gt,soft.name = "Coverage correction",smooth = TRUE)
 df.5 <- create.fdr.pow(rnk.5,ground.truth = gt,soft.name = "Beta-binomial per individual",smooth = TRUE)
-df.6 <- create.fdr.pow(rnk.6,ground.truth = gt,soft.name = "Multiple runs",smooth = TRUE)
+df.6 <- create.fdr.pow(rnk.6,ground.truth = gt,soft.name = "Multiple runs sum",smooth = TRUE)
+df.7 <- create.fdr.pow(rnk.7,ground.truth = gt,soft.name = "Multiple runs median",smooth = TRUE)
 
 ## Bind the data frames
 df <- rbind(df.1,df.2,df.3,df.4,df.5,df.6)
@@ -68,7 +82,7 @@ colnames(df) <- c("Software","FDR","Power")
 
 ## ggplot
 p0 <- ggplot(data = df,aes(x=FDR,y=Power)) + 
-  geom_line(aes(linetype=Software, color=Software),size=2,na.rm = TRUE) +
+  geom_line(aes(linetype=Software, color=Software),size=1.5,na.rm = TRUE) +
   xlim(0,1) + ylim(0,1) +
   theme_bw() +
   theme(axis.text=element_text(size=15),

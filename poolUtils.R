@@ -99,7 +99,7 @@ sample.geno = function(pool.matrix=NULL,cover.matrix=NULL,nINDperPOOL=NULL,metho
       n.reads <- array(NA,dim=c(1,nSNP))
       nna <- which(pool.matrix[k,]>0)
       na <- which(pool.matrix[k,]==0)
-      epsilon <- 0.00001
+      epsilon <- 0.0001
       n.reads[nna] <- cover.1[nna]/pool.matrix[k,nna]
       n.reads[na] <- cover.1[na]/epsilon
       cover.2 <- n.reads - cover.1
@@ -120,6 +120,15 @@ sample.geno = function(pool.matrix=NULL,cover.matrix=NULL,nINDperPOOL=NULL,metho
   return(geno)
 }
 
+#' Simulate frequency matrix from genotype and coverage matrices
+#'
+#' \code{cover.to.pool} creates a matrix of frequency estimates, given a genotype matrix and a coverage matrix.
+#' 
+#' @param data a matrix with n rows and p columns where n is the number of individuals and p is the number of markers.  
+#' @param cover.matrix a matrix with n rows and p columns where n is the number of pools and is the number of markers.
+#' @param pop a list of integers or strings specifying which subpopulation the individuals belong to.
+#' @param ploidy an integer specifying the ploidy of the individuals.
+#'
 cover.to.pool = function(data,cover.matrix,pop,ploidy=2){
   nPOP <- nrow(cover.matrix)
   nSNP <- ncol(cover.matrix)

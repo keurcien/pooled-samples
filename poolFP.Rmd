@@ -1,0 +1,244 @@
+---
+title: 'Pooled-Samples Analysis'
+output: html_document
+---
+
+You can download the source files on my GitHub: [https://github.com/keurcien?tab=repositories](https://github.com/keurcien?tab=repositories)
+
+```{r,include=FALSE}
+require(ggplot2)
+require(pcadapt)
+require(qvalue)
+source("~/Documents/thesis/git/FDR/fdrUtils.R")
+source("~/Documents/thesis/git/pooled-samples/poolUtils.R")
+source("~/Documents/thesis/git/pooled-samples/poolOld.R")
+```
+
+## Normal coverage 30~40X with a region of 1000~2000X
+```{r,include=FALSE}
+case <- "DM"
+min.maf <- 0.05
+
+if (case=="DM"){
+  geno.matrix <- read.table(system.file("extdata","geno3pops",package="pcadapt"))
+  gt <- 1:150
+} else if (case=="IM"){
+  geno.matrix <- read.table("~/Documents/thesis/MolEcolRes/IM/dems_3_neu_10_out_001_n150_p1000")
+  gt <- read.table("~/Documents/thesis/MolEcolRes/IM/dems_3_neu_10_out_001_n150_p1000.gt")$V1
+}
+
+pop <- c(rep(1,50),rep(2,50),rep(3,50))
+pool.matrix <- get.pool.matrix(data=geno.matrix,pop=pop,ploidy=2)
+cover.matrix <- simulate.cover(nrow=nrow(pool.matrix),ncol=ncol(pool.matrix),
+                               min.cover=c(30,1000),max.cover=c(40,2000),
+                               high.cov.loc = 350:400)
+pool.matrix.test <- cover.to.pool(data=geno.matrix,cover.matrix = cover.matrix,pop = pop)
+new.geno <- sample.geno(pool.matrix = pool.matrix.test,cover.matrix,nINDperPOOL = c(100,100,100))
+bino.geno <- sample.geno(pool.matrix.test,nINDperPOOL = c(100,100,100))
+ind.geno <- sample.geno(pool.matrix.test,cover.matrix=cover.matrix,nINDperPOOL = c(100,100,100),method = "per.ind")
+
+## Get the statistics
+filename <- read.pcadapt(new.geno, type = "lfmm", local.env = TRUE)
+x <- pcadapt(filename,K=2,min.maf = min.maf)
+filename.bino <- read.pcadapt(bino.geno, type = "lfmm", local.env = TRUE)
+x.bino <- pcadapt(filename.bino,K=2,min.maf = min.maf)
+filename.ind <- read.pcadapt(ind.geno,type="lfmm",local.env=TRUE)
+x.ind <- pcadapt(filename.bino,K=2,min.maf = min.maf)
+y <- pool.old(pool.matrix.test,K=2)
+z <- pool.old.corrected(pool.matrix.test,K=2,min.maf = min.maf,cover.matrix = cover.matrix)
+
+## For multiple runs
+stat.multiple <- 0
+n.run <- 10
+stat.set <- NULL
+for (n.test in 1:n.run){
+  multiple.geno <- sample.geno(pool.matrix = pool.matrix.test,cover.matrix,nINDperPOOL = c(100,100,100))
+  filename.multiple <- read.pcadapt(multiple.geno, type = "lfmm", local.env = TRUE)
+  x.multiple <- pcadapt(filename.multiple,K=2,min.maf = min.maf)
+  stat.multiple <- stat.multiple + x.multiple$chi2.stat
+  stat.set <- rbind(stat.set,x.multiple$stat)
+}
+deg.f <- 2
+x.sum <- x.multiple
+x.sum$stat <- stat.multiple/n.run
+x.sum$gif <- median(x.sum$stat,na.rm=TRUE)/qchisq(0.5,df=deg.f)
+x.sum$chi2.stat <- x.sum$stat/x.sum$gif
+x.sum$pvalues <- as.numeric(pchisq(x.sum$chi2.stat,df=deg.f,lower.tail=FALSE))
+plot(x.sum,option="qqplot")
+#stat.med <- apply(stat.set,MARGIN=2,FUN=function(x){median(x)})
+
+## Order the statistics
+rnk.1 <- sort(x$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.2 <- sort(y$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.3 <- sort(x.bino$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.4 <- sort(z$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.5 <- sort(x.ind$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.6 <- sort(stat.multiple,decreasing = TRUE,index.return=TRUE)$ix
+#rnk.7 <- sort(stat.med,decreasing = TRUE,index.return=TRUE)$ix
+
+qval.1 <- qvalue(x$pvalues)$qvalues
+qval.2 <- qvalue(y$pvalues)$qvalues
+qval.3 <- qvalue(x.bino$pvalues)$qvalues
+qval.4 <- qvalue(z$pvalues)$qvalues
+qval.5 <- qvalue(x.ind$pvalues)$qvalues
+qval.6 <- qvalue(x.sum$pvalues)$qvalues
+
+q.seuil <- 0.1
+
+outl.1 <- which(qval.1<q.seuil)
+outl.2 <- which(qval.2<q.seuil)
+outl.3 <- which(qval.3<q.seuil)
+outl.4 <- which(qval.4<q.seuil)
+outl.5 <- which(qval.5<q.seuil)
+outl.6 <- which(qval.6<q.seuil)
+
+
+fdr.1 <- compute.fdr(outl.1,ground.truth = gt)
+fdr.2 <- compute.fdr(outl.2,ground.truth = gt)
+fdr.3 <- compute.fdr(outl.3,ground.truth = gt)
+fdr.4 <- compute.fdr(outl.4,ground.truth = gt)
+fdr.5 <- compute.fdr(outl.5,ground.truth = gt)
+fdr.6 <- compute.fdr(outl.6,ground.truth = gt)
+
+pow.1 <- compute.power(outl.1,ground.truth = gt)
+pow.2 <- compute.power(outl.2,ground.truth = gt)
+pow.3 <- compute.power(outl.3,ground.truth = gt)
+pow.4 <- compute.power(outl.4,ground.truth = gt)
+pow.5 <- compute.power(outl.5,ground.truth = gt)
+pow.6 <- compute.power(outl.6,ground.truth = gt)
+
+fdr <- c(fdr.1,fdr.2,fdr.3,fdr.4,fdr.5,fdr.6)
+pow <- c(pow.1,pow.2,pow.3,pow.4,pow.5,pow.6)
+plot(seq(1,12,by=2),fdr,pch=19,col="lightgreen",xlim=c(1,12),xaxt="n",xlab="Method",ylab="FDR/Power (in percentage)",ylim=c(0,1))
+points(seq(2,12,by=2),pow,col="red",pch=19)
+axis(1, at=seq(1.5,11.5,by=2), labels=c("BB per pop","FV","Bino","3.0.3","BB per ind","Sum"))
+abline(v=seq(2.5,10.5,by=2))
+legend("topleft",legend=c("FDR","Power"),col=c("lightgreen","red"),pch=19)
+```
+
+```{r,echo=FALSE}
+simple.df <- as.data.frame(array(0,dim=c(2,6)))
+rownames(simple.df) <- c("FDR","Power")
+colnames(simple.df) <- c("BB per pop","First version","Bino","3.0.3","BB per ind","Sum")
+simple.df[1,] <- c(fdr.1,fdr.2,fdr.3,fdr.4,fdr.5,fdr.6)
+simple.df[2,] <- c(pow.1,pow.2,pow.3,pow.4,pow.5,pow.6)
+barplot(as.matrix(simple.df),
+        xlab="Method", col=c("darkblue","red"),
+        legend = rownames(simple.df), beside=TRUE)
+
+```
+
+
+## Small coverage 2~5X with a region of 1000~2000X
+```{r,include=FALSE}
+case <- "DM"
+min.maf <- 0.05
+
+if (case=="DM"){
+  geno.matrix <- read.table(system.file("extdata","geno3pops",package="pcadapt"))
+  gt <- 1:150
+} else if (case=="IM"){
+  geno.matrix <- read.table("~/Documents/thesis/MolEcolRes/IM/dems_3_neu_10_out_001_n150_p1000")
+  gt <- read.table("~/Documents/thesis/MolEcolRes/IM/dems_3_neu_10_out_001_n150_p1000.gt")$V1
+}
+
+pop <- c(rep(1,50),rep(2,50),rep(3,50))
+pool.matrix <- get.pool.matrix(data=geno.matrix,pop=pop,ploidy=2)
+cover.matrix <- simulate.cover(nrow=nrow(pool.matrix),ncol=ncol(pool.matrix),
+                               min.cover=c(2,1000),max.cover=c(5,2000),
+                               high.cov.loc = 350:400)
+pool.matrix.test <- cover.to.pool(data=geno.matrix,cover.matrix = cover.matrix,pop = pop)
+new.geno <- sample.geno(pool.matrix = pool.matrix.test,cover.matrix,nINDperPOOL = c(100,100,100))
+bino.geno <- sample.geno(pool.matrix.test,nINDperPOOL = c(100,100,100))
+ind.geno <- sample.geno(pool.matrix.test,cover.matrix=cover.matrix,nINDperPOOL = c(100,100,100),method = "per.ind")
+
+## Get the statistics
+filename <- read.pcadapt(new.geno, type = "lfmm", local.env = TRUE)
+x <- pcadapt(filename,K=2,min.maf = min.maf)
+filename.bino <- read.pcadapt(bino.geno, type = "lfmm", local.env = TRUE)
+x.bino <- pcadapt(filename.bino,K=2,min.maf = min.maf)
+filename.ind <- read.pcadapt(ind.geno,type="lfmm",local.env=TRUE)
+x.ind <- pcadapt(filename.bino,K=2,min.maf = min.maf)
+y <- pool.old(pool.matrix.test,K=2)
+z <- pool.old.corrected(pool.matrix.test,K=2,min.maf = min.maf,cover.matrix = cover.matrix)
+
+## For multiple runs
+stat.multiple <- 0
+n.run <- 10
+stat.set <- NULL
+for (n.test in 1:n.run){
+  multiple.geno <- sample.geno(pool.matrix = pool.matrix.test,cover.matrix,nINDperPOOL = c(100,100,100))
+  filename.multiple <- read.pcadapt(multiple.geno, type = "lfmm", local.env = TRUE)
+  x.multiple <- pcadapt(filename.multiple,K=2,min.maf = min.maf)
+  stat.multiple <- stat.multiple + x.multiple$chi2.stat
+  stat.set <- rbind(stat.set,x.multiple$stat)
+}
+deg.f <- 2
+x.sum <- x.multiple
+x.sum$stat <- stat.multiple/n.run
+x.sum$gif <- median(x.sum$stat,na.rm=TRUE)/qchisq(0.5,df=deg.f)
+x.sum$chi2.stat <- x.sum$stat/x.sum$gif
+x.sum$pvalues <- as.numeric(pchisq(x.sum$chi2.stat,df=deg.f,lower.tail=FALSE))
+plot(x.sum,option="qqplot")
+#stat.med <- apply(stat.set,MARGIN=2,FUN=function(x){median(x)})
+
+## Order the statistics
+rnk.1 <- sort(x$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.2 <- sort(y$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.3 <- sort(x.bino$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.4 <- sort(z$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.5 <- sort(x.ind$stat,decreasing = TRUE,index.return=TRUE)$ix
+rnk.6 <- sort(stat.multiple,decreasing = TRUE,index.return=TRUE)$ix
+#rnk.7 <- sort(stat.med,decreasing = TRUE,index.return=TRUE)$ix
+
+qval.1 <- qvalue(x$pvalues)$qvalues
+qval.2 <- qvalue(y$pvalues)$qvalues
+qval.3 <- qvalue(x.bino$pvalues)$qvalues
+qval.4 <- qvalue(z$pvalues)$qvalues
+qval.5 <- qvalue(x.ind$pvalues)$qvalues
+qval.6 <- qvalue(x.sum$pvalues)$qvalues
+
+q.seuil <- 0.1
+
+outl.1 <- which(qval.1<q.seuil)
+outl.2 <- which(qval.2<q.seuil)
+outl.3 <- which(qval.3<q.seuil)
+outl.4 <- which(qval.4<q.seuil)
+outl.5 <- which(qval.5<q.seuil)
+outl.6 <- which(qval.6<q.seuil)
+
+
+fdr.1 <- compute.fdr(outl.1,ground.truth = gt)
+fdr.2 <- compute.fdr(outl.2,ground.truth = gt)
+fdr.3 <- compute.fdr(outl.3,ground.truth = gt)
+fdr.4 <- compute.fdr(outl.4,ground.truth = gt)
+fdr.5 <- compute.fdr(outl.5,ground.truth = gt)
+fdr.6 <- compute.fdr(outl.6,ground.truth = gt)
+
+pow.1 <- compute.power(outl.1,ground.truth = gt)
+pow.2 <- compute.power(outl.2,ground.truth = gt)
+pow.3 <- compute.power(outl.3,ground.truth = gt)
+pow.4 <- compute.power(outl.4,ground.truth = gt)
+pow.5 <- compute.power(outl.5,ground.truth = gt)
+pow.6 <- compute.power(outl.6,ground.truth = gt)
+
+fdr <- c(fdr.1,fdr.2,fdr.3,fdr.4,fdr.5,fdr.6)
+pow <- c(pow.1,pow.2,pow.3,pow.4,pow.5,pow.6)
+plot(seq(1,12,by=2),fdr,pch=19,col="lightgreen",xlim=c(1,12),xaxt="n",xlab="Method",ylab="FDR/Power (in percentage)",ylim=c(0,1))
+points(seq(2,12,by=2),pow,col="red",pch=19)
+axis(1, at=seq(1.5,11.5,by=2), labels=c("BB per pop","First version","Bino","3.0.3","BB per ind","Sum"))
+abline(v=seq(2.5,10.5,by=2))
+legend("topleft",legend=c("FDR","Power"),col=c("lightgreen","red"),pch=19)
+```
+
+```{r,echo=FALSE}
+simple.df <- as.data.frame(array(0,dim=c(2,6)))
+rownames(simple.df) <- c("FDR","Power")
+colnames(simple.df) <- c("BB per pop","First version","Bino","3.0.3","BB per ind","Sum")
+simple.df[1,] <- c(fdr.1,fdr.2,fdr.3,fdr.4,fdr.5,fdr.6)
+simple.df[2,] <- c(pow.1,pow.2,pow.3,pow.4,pow.5,pow.6)
+barplot(as.matrix(simple.df),
+        xlab="Method", col=c("darkblue","red"),
+        legend = rownames(simple.df), beside=TRUE)
+
+```

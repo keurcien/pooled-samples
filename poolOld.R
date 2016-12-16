@@ -22,6 +22,9 @@ pool.old <- function(input,K,min.maf=0.05){
   }
   res$gif <- median(res$stat,na.rm=TRUE)/qchisq(0.5,df=K)
   res$chi2.stat <- res$stat/res$gif
+  res$pvalues <- compute.pval(res$chi2.stat,K,method="mahalanobis")
+  class(res) <- 'pcadapt'
+  attr(res,"K") <- K
   return(res)
 }
 
@@ -38,7 +41,7 @@ pool.old.corrected = function(data,K,min.maf,cover.matrix=NULL){
       if ((!is.na(se)) && (se > 0)){
         z.matrix[n,k] <- f_i/se 
       } else {
-        z.matrix[n,k] <- f_i/0.01
+        z.matrix[n,k] <- f_i
       }
     }
   }
@@ -50,15 +53,6 @@ pool.old.corrected = function(data,K,min.maf,cover.matrix=NULL){
   z.matrix[,res$maf<min.maf] <- NA
   res$stat <- array(NA,dim=nSNP)
   finite.list <- which(!is.na(apply(abs(z.matrix),2,sum)))
-  #   if (K>1){
-  #     res$stat[finite.list] <- as.vector(robust::covRob(res$loadings,na.action=na.omit,estim="pairwiseGK")$dist)
-  #     res$gif <- median(res$stat,na.rm=TRUE)/qchisq(0.5,df=K)
-  #   } else {
-  #     onedcov <- as.vector(MASS::cov.rob(res$loadings[finite.list,1]))
-  #     res$gif <- onedcov$cov[1]
-  #     res$stat <- (res$zscores[,1]-onedcov$center)^2
-  #   }
-  #   res$chi2.stat <- res$stat/res$gif
   res$stat <- as.vector(robust::covRob(t(z.matrix),na.action=na.omit,estim = "pairwiseGK")$dist)
   res$chi2.stat <- res$stat
   # Compute p-values
